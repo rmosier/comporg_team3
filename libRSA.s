@@ -6,6 +6,7 @@
 
 .global modulus
 .global gcd
+.global powmod
 
 #Purpose: find modulus of number 
 #Inputs: r0 - input number, r1 - divisor
@@ -31,7 +32,7 @@ modulus:
 # END modulus
 
 
-#iPurpose: find gcd between two numbers 
+#Purpose: find gcd between two numbers 
 #Inputs: r0 - number 1 (a), r1 - number 2 (b)
 #Output: r0 - gcd of input
 .text
@@ -71,4 +72,46 @@ gcd:
     ADD sp, sp, #4
     MOV pc, lr
 # END gcd
+
+#Purpose: find a^b mod c 
+#Inputs: r0 - number 1 (a), r1 - number 2 (b), r2 - number 3 (c)
+#Output: r0 - a^b mod c
+.text
+powmod:
+    # push stack
+    SUB sp, sp, #12
+    STR lr, [sp, #0]
+    STR r4, [sp, #4] 
+    STR r5, [sp, #8]   
+
+    MOV r4, #1 // loop counter
+    MOV r5, r1 // loop limit
+
+    MOV r1, r0 // set r1 to a
+    MOV r6, r2 // save copy of c    
+
+    StartLoop:
+        # check limit
+        CMP r4, r5
+        BGE EndLoop
+
+        MUL r1, r0, r1 // multiply a*a
+        
+        # get next value
+        ADD r4, r4, #1
+        B StartLoop
+    EndLoop:
+
+    # compute modulus
+    MOV r0, r1
+    MOV r1, r6
+    BL modulus
+    
+    # pop stack
+    LDR lr, [sp, #0]
+    LDR r4, [sp, #4]
+    LDR r5, [sp, #8]
+    ADD sp, sp, #12
+    MOV pc, lr
+# END powmod
 
