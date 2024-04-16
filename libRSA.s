@@ -136,11 +136,13 @@ isPrime:
     STR r8, [sp, #20]
     STR r9, [sp, #24]
 
-    # Check if input is <= 2
-    CMP r0, #2
+    # Return value in r7. Initialize as true
+    MOV r7, #1
+
+    # Check if input is <= 3
+    CMP r0, #3
     BHI ElseTestReq
         # Return true
-        MOV r1, #1
         B EndTestReqIf
 
     ElseTestReq:
@@ -148,38 +150,30 @@ isPrime:
         MOV r4, r0
         # Put counter for TestRepeatLoop in r5
         MOV r5, #0
-        # Test results in r7. Initialize to true
-        MOV r7, #1
+
+        # Set random seed
+        MOV r0, #0
+        BL time
+        BL srand
 
         TestRepeatLoopStart:
             # End loop if count is reached
             CMP r5, #10
-            BGE TestRepeatEnd @ Break out of TestRepeatLoop
+            BGE TestRepeatLoopEnd @ Break out of TestRepeatLoop
 
-            # Set random seed
-            MOV r0, #0
-            BL time
-            BL srand
             # Get random value for a in r0
             BL rand
             # Adjust value so (1 < a < input)
-#TODO update mod function registers. Assumed to be r0 and r1
-            SUB r1, r4, #1
-            BL mod
-#TODO update return register. Assumed to be r0
+            SUB r1, r4, #3 @ -2 for excluding 1 and input value, -1 b/c first possible mod value is 0
+            BL modulus
             # Store value of a in r6
-            ADD r6, r0, #1
+            ADD r6, r0, #2
 
             # Fermat test. Checking (a^p) = a mod p
-#TODO update pow function registers. Assumed to be r0, r1, and r2
             MOV r0, r6
             MOV r1, r4
             MOV r2, r4
-            BL pow
-#TODO update return register. Assumed to be r0. Update mod registers
-            MOV r1, r4
-            BL mod
-#TODO update return register for mod
+            BL powmod
             # Check if Fermat test failed
             CMP r0, r6
             BEQ FermatFailedElse
@@ -191,35 +185,32 @@ isPrime:
                 # Fermat test passed. Do second part
                 # Find largest power of 2 that divides (input - 1)
                 # Keep last valid power in r8. Initialize to 2
-#TODO update power checks if potentially larger than int max
                 MOV r8, #2
                 # Logical variable for breaking loop in r9
                 MOV r9, #0
                 StartPowerLoop:
-                    # Calculate next power of 2
-                    MOV r0, r8, LSL #1
+                    # Calculate next power of 2 in r1
+                    MOV r1, r8, LSL #1
                     # (input - 1) in r0
                     SUB r0, r4, #1
                     # Check if power is greater than (input - 1)
                     CMP r0, r1
                     ADDLO r9, #1
                     # Check if power overflowed
-                    CMP r0, #0
+                    CMP r1, #0
                     ADDEQ r9, #1
                     # Check if divisible
-                    MOV r1, r0
-                    BL mod
-#TODO update mod return
-                    # Check if divided evenly
+                    BL modulus
                     CMP r0, #0
                     ADDNE r9, #1
-                    # Check loop if r9 > 0
+                    # Break loop if r9 > 0
                     CMP r9, #0
-                    BNE BreakLoopElse
+                    BEQ BreakLoopElse
                         # Not divisible by next power or power is equal to (input - 1)
                         B EndPowerLoop @ Break out of PowerLoop
 
                     BreakLoopElse:
+                        # Set power of two to the tested value
                         LSL r8, r8, #1
 
                     B StartPowerLoop @ Continue PowerLoop
@@ -232,23 +223,26 @@ isPrime:
                 MOV r9, r0
 
                 StartFalseRootLoop:
-                    # Calculate (a^currentPower * q) mod input
-#TODO update pow registers
-                    MOV r0, r5
+                    # Calculate (a^(currentPower * q)) mod input
+                    MOV r0, r6
                     MUL r1, r8, r9
                     MOV r2, r4
+                    BL powmod
                     # Check if result is not 1
                     CMP r0, #1
                     BEQ ResultElse
+                        # If mod result is positive, must subtract input so it become negative
+                        SUBGE r0, r0, r4
+                        # Check if mod result is -1
                         CMP r0, #-1
                         MOVNE r7, #0
                         B EndFalseRootLoop @ Break out of FalseRootLoop
 
                     ResultElse:
                         LSR r8, #1
-                        # Check if power of two is now 0
+                        # Check that power of two is not 0
                         CMP r8, #0
-                        BEQ EndFalseRootLoop # Break out of FalseRootLoop
+                        BEQ EndFalseRootLoop @ Break out of FalseRootLoop
 
                     B StartFalseRootLoop @ Continue FalseRootLoop
                 EndFalseRootLoop:
@@ -256,10 +250,15 @@ isPrime:
                 # Check if input is known to be composite
                 CMP r7, #0
                 BEQ TestRepeatLoopEnd @ Break out of TestRepeatLoop
+
+                ADD r5, #1
             B TestRepeatLoopStart @ Continue TestRepeatLoop
         TestRepeatLoopEnd:
 
     EndTestReqIf:
+
+    # Move return value to r1
+    MOV r1, r7
 
     # Return from stack
     LDR lr, [sp, #0]
@@ -295,6 +294,7 @@ cpubexp:
     # Begin input checking loop
     InputLoopStart:
         # Print prompt
+        MOV r1, r4
         LDR r0, =inputPrompt
         BL printf
 
@@ -304,23 +304,21 @@ cpubexp:
         BL scanf
 
         # Find gcd of input and totient
-#TODO Change registers based on function. Assumed to be r0 and r1
         LDR r0, =inputValue
         LDR r0, [r0, #0]
         MOV r1, r4
         BL gcd
 
-#TODO Change return register. Assumed to be r0
         # Check if coprime (gcd is 1)
         CMP r0, #1
         BNE InvalidInput
+            # Coprime, value can be used
             LDR r1, =inputValue
             LDR r1, [r1, #0]
-
             B InputLoopEnd @ Break out of InputLoop
 
         InvalidInput:
-            # Print error message
+            # Not coprime, another value needed
             LDR r0, =invalidInputMessage
             LDR r1, =inputValue
             LDR r1, [r1, #0]
@@ -359,7 +357,7 @@ cpubexp:
 .text
 cprivexp:
     # Push to stack
-    SUB sp, #32
+    SUB sp, #36
     STR lr, [sp, #0]
     STR r4, [sp, #4]
     STR r5, [sp, #8]
@@ -375,7 +373,7 @@ cprivexp:
     MOV r9, r0
     MOV r10, r1
 
-    # Initiallize values of x1, x2, y1, y2 in r4-r8
+    # Initiallize values of x1, x2, y1, y2 in r4-r7
     MOV r4, #0
     MOV r5, #1
     MOV r6, #1
@@ -390,7 +388,7 @@ cprivexp:
             MOV r2, r7
 
             B NonzeroBLoopEnd @ Break out of NonzeroBLoop
-        ContinueLoop
+        ContinueLoop:
             # Calculate q or (a/b) in r0
             MOV r0, r9
             MOV r1, r10
@@ -407,14 +405,14 @@ cprivexp:
             MOV r1, r5
             MOV r5, r4
             # (oldx2 - q * x1) in r4
-            MUL r2, r0, r2
+            MUL r2, r0, r4
             SUB r4, r1, r2
 
             # Old y2 in r1. Update value of y2 to y1
             MOV r1, r7
             MOV r7, r6
             # (oldy2 - q * y1) in r6
-            MUL r2, r0, r2
+            MUL r2, r0, r6
             SUB r6, r1, r2
 
         B NonzeroBLoopStart @ Continue NonzeroBLoop
@@ -430,7 +428,7 @@ cprivexp:
     LDR r9, [sp, #24]
     LDR r10, [sp, #28]
     LDR r11, [sp, #32]
-    ADD sp, #32
+    ADD sp, #36
     MOV pc, lr
 
 # end cprivexp
