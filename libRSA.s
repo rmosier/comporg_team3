@@ -195,14 +195,14 @@ isPrime:
                     SUB r0, r4, #1
                     # Check if power is greater than (input - 1)
                     CMP r0, r1
-                    ADDLO r9, #1
+                    ORRLO r9, #1
                     # Check if power overflowed
                     CMP r1, #0
-                    ADDEQ r9, #1
+                    ORREQ r9, #1
                     # Check if divisible
                     BL modulus
                     CMP r0, #0
-                    ADDNE r9, #1
+                    ORRNE r9, #1
                     # Break loop if r9 > 0
                     CMP r9, #0
                     BEQ BreakLoopElse
@@ -312,13 +312,13 @@ cpubexp:
         # Check if coprime (gcd is 1)
         CMP r0, #1
         BNE InvalidInput
-            # Coprime, value can be used
             LDR r1, =inputValue
             LDR r1, [r1, #0]
+
             B InputLoopEnd @ Break out of InputLoop
 
         InvalidInput:
-            # Not coprime, another value needed
+            # Print error message
             LDR r0, =invalidInputMessage
             LDR r1, =inputValue
             LDR r1, [r1, #0]
@@ -432,4 +432,144 @@ cprivexp:
     MOV pc, lr
 
 # end cprivexp
+
+# Function: genKeys
+# Purpose: Generates n and the public/private keys. Restricts p,q >= 13
+# Input:
+#
+# Output: r0 - n (integer)
+#         r1 - public key (integer)
+#         r2 - private key (integer)
+#
+.global genKeys
+.text
+genKeys:
+    # Push to stack
+    SUB sp, #16
+    STR lr, [sp, #0]
+    STR r4, [sp, #4]
+    STR r5, [sp, #8]
+    STR r6, [sp, #12]
+
+    GenInputLoopStart:
+        # Prompt for input
+        LDR r0, =inputPQPrompt
+        BL printf
+
+        # Read input
+        LDR r0, =formatStrTwoInt
+        LDR r1, =inputP
+        LDR r2, =inputQ
+        BL scanf
+
+        # Check if numbers are valid
+        LDR r1, =inputP
+        LDR r1, [r1, #0]
+        LDR r2, =inputQ
+        LDR r2, [r2, #0]
+        # Start if block; check if numbers are the same
+            CMP r1, r2
+            BNE RangeCheckP
+
+            # p == q code block
+            LDR r0, =notDistinctMessage
+            BL printf
+            B EndValidityChecks
+        RangeCheckP:
+            CMP r1, #13
+            BGE RangeCheckQ
+
+            # p outside of range code block
+            LDR r0, =notInRangeMessage
+            BL printf
+            B EndValidityChecks
+        RangeCheckQ:
+            CMP r2, #13
+            BGE CompCheckP
+
+            # q outside of range code block
+            LDR r0, =notInRangeMessage
+            MOV r1, r2
+            BL printf
+            B EndValidityChecks
+        CompCheckP:
+            MOV r0, r1
+            BL isPrime
+            CMP r1, #1
+            BEQ CompCheckQ
+
+            # p is composite code block
+            LDR r0, =notPrimeMessage
+            LDR r1, =inputP
+            LDR r1, [r1, #0]
+            BL printf
+            B EndValidityChecks
+        CompCheckQ:
+            LDR r0, =inputQ
+            LDR r0, [r0, #0]
+            BL isPrime
+            CMP r1, #1
+            BEQ CompCheckElse
+
+            # q is composite code block
+            LDR r0, =notPrimeMessage
+            LDR r1, =inputQ
+            LDR r1, [r1, #0]
+            BL printf
+            B EndValidityChecks
+        CompCheckElse:
+            B GenInputLoopEnd @ Break out of GenInputLoop
+
+        EndValidityChecks:
+        B GenInputLoopStart @ Continue GenInputLoop
+    GenInputLoopEnd:
+
+    # Modulus in r4
+    LDR r0, =inputP
+    LDR r0, [r0, #0]
+    LDR r1, =inputQ
+    LDR r1, [r1, #0]
+    MUL r4, r0, r1
+    
+    # Totient in r5
+    SUB r0, #1
+    SUB r1, #1
+    MUL r5, r0, r1
+    
+    # Public exp in r6
+    MOV r0, r5
+    BL cpubexp
+    MOV r6, r1
+
+    # Private exp in r2
+    MOV r0, r5
+    MOV r1, r6
+    BL cprivexp
+
+    # Move return values to correct registers
+    MOV r0, r4
+    MOV r1, r6
+
+    # Return from stack
+    LDR lr, [sp, #0]
+    LDR r4, [sp, #4]
+    LDR r5, [sp, #8]
+    LDR r6, [sp, #12]
+    ADD sp, #16
+    MOV pc, lr
+
+.data
+    # Input values
+    inputP: .word 0
+    inputQ: .word 0
+    # Format string for two integers separated by a space
+    formatStrTwoInt: .asciz "%d %d"
+    # Prompt for input
+    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13\n"
+    # Error messages
+    notInRangeMessage: .asciz "%d is not >= 13\n"
+    notPrimeMessage: .asciz "%d is not prime\n"
+    notDistinctMessage: .asciz "%d is equal to %d\n"
+# end genKeys
+
 
