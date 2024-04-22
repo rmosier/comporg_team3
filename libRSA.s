@@ -7,6 +7,7 @@
 .global modulus
 .global gcd
 .global powmod
+.global isPrime2
 
 #Purpose: find modulus of number 
 #Inputs: r0 - input number, r1 - divisor
@@ -272,6 +273,77 @@ isPrime:
     MOV pc, lr
 
 # end isPrime
+
+# isPrime2
+# Inputs: r0 - input number
+# Outputs: r0 - 1 if prime, 0 if not prime, -1 if invalid (e.g <2)
+.text
+isPrime2:
+    SUB sp, sp, #12
+    STR lr, [sp, #0]
+    STR r4, [sp, #4]
+    STR r5, [sp, #8]
+
+    # initialize start of array as 2 
+    MOV r4, #2
+
+    # initialize end of array as input//2 +1 
+    MOV r6, r0 // save copy of input
+    MOV r1, #2
+    BL __aeabi_idiv
+    ADD r0, r0, #1 
+    MOV r5, r0 // loop limit
+   
+    # initialize r7 as true
+    MOV r7, #0
+
+    StartPrimeLoop:
+        # Check the limit
+        CMP r4, r5
+        BGE EndPrimeLoop
+
+        # Loop statement or block
+        MOV r1, r4
+        MOV r0, r6
+        BL modulus
+        CMP r0, #0
+        ADDEQ r7, #1 
+
+        # Get the next value
+        ADD r4, r4, #1
+        B StartPrimeLoop
+    EndPrimeLoop:
+    
+    CMP r6, #2
+    MOVLT r7, #-1 // -1 if input wasn't valued (<2)
+    MOV r0, r7
+ 
+    # print if number is error or not
+    MOV r1, #0
+    MOV r7, r0 // copy isPrime result    
+    CMP r0, #-1
+    MOVEQ r1, #1
+
+    CMP r1, #0
+    BNE ErrorMsg
+        CMP r7, #0
+        BGT NotPrimeMsg
+            MOV r0, #1
+            B EndMsg
+        NotPrimeMsg:
+            MOV r0, #0
+            B EndMsg
+    ErrorMsg:
+        MOV r0, #-1
+    EndMsg:
+
+    LDR lr, [sp, #0]
+    LDR r4, [sp, #4]
+    LDR r5, [sp, #8]
+    ADD sp, sp, #12
+    MOV pc, lr
+# End of IsPrime2
+
 
 
 # Function: cpubexp
