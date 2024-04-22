@@ -9,17 +9,19 @@
 .global powmod
 .global isPrime2
 
+
 #Purpose: find modulus of number 
 #Inputs: r0 - input number, r1 - divisor
 # Output: r0 - modulus of input
 .text
 modulus:
     # push stack
-    SUB sp, sp, #4
+    SUB sp, sp, #8
     STR lr, [sp, #0]
-    
+    STR r4, [sp, #4]
+
     # save original input
-    MOV r4, r0    
+    MOV r4, r0
 
     # finds modulus
     BL __aeabi_idiv
@@ -28,7 +30,8 @@ modulus:
 
     # pop stack
     LDR lr, [sp, #0]
-    ADD sp, sp, #4
+    LDR r4, [sp, #4]
+    ADD sp, sp, #8
     MOV pc, lr
 # END modulus
 
@@ -39,8 +42,10 @@ modulus:
 .text
 gcd:
     # push stack
-    SUB sp, sp, #4
-    STR lr, [sp, #0]    
+    SUB sp, sp, #12
+    STR lr, [sp, #0]
+    STR r4, [sp, #4]
+    STR r5, [sp, #8]
 
     # save copy of r0, r1
     MOV r4, r0
@@ -70,7 +75,9 @@ gcd:
     # pop stack
     Return:
     LDR lr, [sp, #0]
-    ADD sp, sp, #4
+    LDR r4, [sp, #4]
+    LDR r5, [sp, #8]
+    ADD sp, sp, #12
     MOV pc, lr
 # END gcd
 
@@ -81,39 +88,43 @@ gcd:
 .text
 powmod:
     # push stack
-    SUB sp, sp, #12
+    SUB sp, sp, #20
     STR lr, [sp, #0]
-    STR r4, [sp, #4] 
-    STR r5, [sp, #8]   
+    STR r4, [sp, #4]
+    STR r5, [sp, #8]
+    STR r6, [sp, #12]
+    STR r7, [sp, #16]
 
     MOV r4, #1 // loop counter
     MOV r5, r1 // loop limit
 
-    MOV r1, r0 // set r1 to a
-    MOV r6, r2 // save copy of c    
+    MOV r6, r2 // save copy of c
+    MOV r7, r0 // save a
 
     StartLoop:
         # check limit
         CMP r4, r5
         BGE EndLoop
 
-        MUL r1, r0, r1 // multiply a*a
-        
+        MUL r0, r0, r7 // multiply by a
+
+        # reduce product using mod c
+        MOV r1, r6
+        BL modulus
+
         # get next value
         ADD r4, r4, #1
         B StartLoop
     EndLoop:
 
-    # compute modulus
-    MOV r0, r1
-    MOV r1, r6
-    BL modulus
     
     # pop stack
     LDR lr, [sp, #0]
     LDR r4, [sp, #4]
     LDR r5, [sp, #8]
-    ADD sp, sp, #12
+    LDR r6, [sp, #12]
+    LDR r7, [sp, #16]
+    ADD sp, sp, #20
     MOV pc, lr
 # END powmod
 
@@ -277,6 +288,7 @@ isPrime:
 # isPrime2
 # Inputs: r0 - input number
 # Outputs: r0 - 1 if prime, 0 if not prime, -1 if invalid (e.g <2)
+.global isPrime2
 .text
 isPrime2:
     SUB sp, sp, #12
