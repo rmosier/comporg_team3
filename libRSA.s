@@ -656,4 +656,100 @@ genKeys:
     notDistinctMessage: .asciz "%d is equal to %d\n"
 # end genKeys
 
+#Purpose: encrypt
+#Output:encrypt.txt 
+.global encrypt
 
+.text
+
+encrypt:
+    # Push initial registers and link register onto stack
+    SUB sp, sp, #32     @ Reserve stack space for 8 registers
+    STR lr, [sp, #28]   @ Save link register
+    STR r4, [sp, #24]   @ Save r4
+    STR r5, [sp, #20]   @ Save r5
+    STR r6, [sp, #16]   @ Save r6
+    STR r7, [sp, #12]   @ Save r7
+    STR r8, [sp, #8]    @ Save r8
+    STR r9, [sp, #4]    @ Save r9
+    STR r10, [sp]       @ Save r10
+ 
+    # Prompt for modulus n and public key exponent e
+    LDR r0, =keysPrompt
+    BL printf
+ 
+    # Read input for modulus n and public key exponent e
+    LDR r0, =formatStrTwoInt
+    LDR r1, =inputN
+    LDR r2, =inputE
+    BL scanf
+ 
+    # Validate input
+    LDR r1, =inputN
+    LDR r4, [r1]        @ Load modulus n
+    LDR r2, =inputE
+    LDR r5, [r2]        @ Load public key exponent e
+ 
+    BL powmod           @ Assume powmod adjusts r0 = m^e mod n correctly
+ 
+    # Push the encrypted character onto the stack
+    PUSH {r0}           @ Push the encrypted character onto the stack
+ 
+    # Increment the loop counter
+    ADD r8, r8, #1      @ Increment the loop counter
+ 
+    B EncryptLoop       @ Repeat for next character
+ 
+CloseFile:
+    # Write the encrypted characters to the file
+    MOV r10, r8         @ Move the loop counter to r10
+ 
+WriteLoop:
+    CMP r10, #0         @ Check if the loop counter is zero
+    BEQ CloseFile2      @ Exit loop if all characters have been written
+ 
+    # Pop the encrypted character from the stack
+    POP {r2}            @ Pop the encrypted character into r2
+ 
+    # Write the encrypted character to the file using fprintf
+    MOV r0, r7          @ File handle
+    LDR r1, =fprintfFormat  @ Format string for fprintf
+    BL fprintf
+ 
+    # Decrement the loop counter
+    SUB r10, r10, #1    @ Decrement the loop counter
+ 
+    B WriteLoop         @ Repeat for next character
+ 
+CloseFile2:
+    # Close the output file
+    MOV r0, r7          @ File handle
+    BL fclose
+ 
+    # Restore registers from stack
+    LDR r10, [sp]       @ Restore r10
+    LDR r9, [sp, #4]    @ Restore r9
+    LDR r8, [sp, #8]    @ Restore r8
+    LDR r7, [sp, #12]   @ Restore r7
+    LDR r6, [sp, #16]   @ Restore r6
+    LDR r5, [sp, #20]   @ Restore r5
+    LDR r4, [sp, #24]   @ Restore r4
+    LDR lr, [sp, #28]   @ Restore link register
+    ADD sp, sp, #32     @ Clean up the stack
+ 
+    # Finish the program
+    MOV r0, #0          @ Standard return value for success
+    MOV pc, lr          @ Return to calling process
+ 
+.data
+keysPrompt: .asciz "Enter modulus n and public key exponent e (separated by space):\n"
+formatStrTwoInt: .asciz "%d %d"
+inputN: .word 0
+inputE: .word 0
+msgPrompt: .asciz "Enter a message to encrypt:\n"
+scanFormat: .asciz "%255s"
+outputFile: .asciz "encrypted.txt"
+openMode: .asciz "w"
+fprintfFormat: .asciz "%d "
+buffer: .space 256
+ 
