@@ -674,13 +674,19 @@ encrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    # Call key generation function
-    BL genKeys          @ Assume this populates n (r0), e (r1), private key (r2)
+    LDR r0, = keysPrompt
+    BL printf
 
-    # Move results into saved registers
-    MOV r4, r0          @ Modulus n
-    MOV r5, r1          @ Public key exponent e
-    MOV r6, r2          @ Private key (not used here, but saved for completeness)
+    LDR r0, = formatStrTwoInt
+    LDR r1, = inputN
+    LDR r2, = inputE
+    BL scanf
+    
+    LDR r1, = inputN
+    LDR r4, [r1]
+    LDR, r2, =inputE
+    LDR r5, [r2]
+
 
     # Prompt for message
     LDR r0, =msgPrompt
@@ -764,10 +770,13 @@ CloseFile2:
     MOV pc, lr          @ Return to calling process
 
 .data
+keysPrompt: .asciz “Enter modulus n and public key exponent e (separated by space):\n”
+formatStrTwoInt: .asciz “%d %d”
+inputN: .word 0
+inputE: .word 0
 msgPrompt: .asciz "Enter a message to encrypt:\n"
 scanFormat: .asciz "%255s"
 outputFile: .asciz "encrypted.txt"
 openMode: .asciz "w"
 fprintfFormat: .asciz "%d "
 buffer: .space 256
- 
