@@ -19,5 +19,10 @@ testPrime: testPrimeMain.s $(LIB)
 	$(CC) $@Main.s -g -c -o $@.o
 	$(CC) $@.o $(LIB) -g -o $@
 
+testEncrypt: testEncrypt.s $(LIB)
+	$(CC) $@.s -g -c -o $@.o
+	$(CC) $@.o $(LIB) -g -o $@
+
+
 .s.o:
 	$(CC) $(@:.o=.s) -g -c -o $@
