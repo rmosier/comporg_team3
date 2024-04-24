@@ -24,7 +24,7 @@ modulus:
     MOV r4, r0
 
     # finds modulus
-    BL __aeabi_idiv
+    BL __aeabi_uidiv
     MUL r2, r0, r1
     SUB r0, r4, r2
 
@@ -131,6 +131,8 @@ powmod:
 
 # Function: isPrime
 # Purpose: Checks if the input number is prime using the Rabin-Miller test. Repeats 10 times
+#          Does not work for negative numbers or numbers greate than 67,108,893
+#
 # Input: r0 - value to check (unsigned integer)
 #
 # Output: r1 - 1 if test passed, else 0
@@ -175,8 +177,11 @@ isPrime:
 
             # Get random value for a in r0
             BL rand
-            # Adjust value so (1 < a < input)
-            SUB r1, r4, #3 @ -2 for excluding 1 and input value, -1 b/c first possible mod value is 0
+            # Adjust value so (1 < a < min(input, 64))
+            CMP r4, #64
+            MOVLE r1, r4
+            MOVGT r1, #64
+            SUB r1, #3
             BL modulus
             # Store value of a in r6
             ADD r6, r0, #2
@@ -560,16 +565,30 @@ genKeys:
             BL printf
             B EndValidityChecks
         RangeCheckP:
+            MOV r3, #0 @ Logical value in r3
             CMP r1, #13
-            BGE RangeCheckQ
+            ORRLT r3, #1
+            LDR r0, =pqUpperLimit
+            LDR r0, [r0, #0]
+            CMP r1, r0
+            ORRGT r3, #1
+            CMP r3, #0
+            BEQ RangeCheckQ
 
             # p outside of range code block
             LDR r0, =notInRangeMessage
             BL printf
             B EndValidityChecks
         RangeCheckQ:
+            MOV r3, #0 @ Logical value in r3
             CMP r2, #13
-            BGE CompCheckP
+            ORRLT r3, #1
+            LDR r0, =pqUpperLimit
+            LDR r0, [r0, #0]
+            CMP r1, r0
+            ORRGT r3, #1
+            CMP r3, #0
+            BEQ CompCheckP
 
             # q outside of range code block
             LDR r0, =notInRangeMessage
@@ -643,15 +662,16 @@ genKeys:
     MOV pc, lr
 
 .data
+    pqUpperLimit: .word 67108859
     # Input values
     inputP: .word 0
     inputQ: .word 0
     # Format string for two integers separated by a space
     formatStrTwoInt: .asciz "%d %d"
     # Prompt for input
-    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13\n"
+    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13 and <= 67,108,859\n"
     # Error messages
-    notInRangeMessage: .asciz "%d is not >= 13\n"
+    notInRangeMessage: .asciz "%d is not in the specified range\n"
     notPrimeMessage: .asciz "%d is not prime\n"
     notDistinctMessage: .asciz "%d is equal to %d\n"
 # end genKeys
