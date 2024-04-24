@@ -24,7 +24,7 @@ modulus:
     MOV r4, r0
 
     # finds modulus
-    BL __aeabi_idiv
+    BL __aeabi_uidiv
     MUL r2, r0, r1
     SUB r0, r4, r2
 
@@ -82,11 +82,11 @@ gcd:
 # END gcd
 
 
-#Purpose: find a^b mod c 
+#Purpose: find a*b mod c 
 #Inputs: r0 - number 1 (a), r1 - number 2 (b), r2 - number 3 (c)
-#Output: r0 - a^b mod c
+#Output: r0 - a*b mod c
 .text
-powmod:
+powmult:
     # push stack
     SUB sp, sp, #20
     STR lr, [sp, #0]
@@ -95,29 +95,45 @@ powmod:
     STR r6, [sp, #12]
     STR r7, [sp, #16]
 
-    MOV r4, #1 // loop counter
-    MOV r5, r1 // loop limit
 
-    MOV r6, r2 // save copy of c
-    MOV r7, r0 // save a
+    MOV r4, r0 // Current a
+    MOV r5, r1 // Current b
+    MOV r6, r2 // save c
 
-    StartLoop:
-        # check limit
-        CMP r4, r5
-        BGE EndLoop
+    MOV r7, #0 // current product in r7
 
-        MUL r0, r0, r7 // multiply by a
+    StartLoopMult:
+        AND r1, r5, #1
+        CMP r1, #0
+        BEQ NotInProduct
+            # Multiply running product
+            ADD r7, r7, r4
 
-        # reduce product using mod c
+            # Reduce using mod c
+            MOV r0, r7
+            MOV r1, r6
+            BL modulus
+
+            MOV r7, r0
+
+        NotInProduct:
+
+        LSR r5, #1
+        CMP r5, #0
+        BEQ EndLoopMult // Break out of multloop
+
+        # Mult a by 2 and reduce using mod c
+        MOV r0, r4, LSL #1
         MOV r1, r6
         BL modulus
 
-        # get next value
-        ADD r4, r4, #1
-        B StartLoop
-    EndLoop:
+        MOV r4, r0 // Store in r4
 
-    
+        B StartLoopMult
+    EndLoopMult:
+
+    MOV r0, r7 // Move return value
+
     # pop stack
     LDR lr, [sp, #0]
     LDR r4, [sp, #4]
@@ -125,6 +141,92 @@ powmod:
     LDR r6, [sp, #12]
     LDR r7, [sp, #16]
     ADD sp, sp, #20
+    MOV pc, lr
+# END powmult
+
+
+#Purpose: find a^b mod c 
+#Inputs: r0 - number 1 (a), r1 - number 2 (b), r2 - number 3 (c)
+#Output: r0 - a^b mod c
+.text
+powmod:
+    # push stack
+    SUB sp, sp, #32
+    STR lr, [sp, #0]
+    STR r4, [sp, #4]
+    STR r5, [sp, #8]
+    STR r6, [sp, #12]
+    STR r7, [sp, #16]
+    STR r8, [sp, #20]
+    STR r9, [sp, #24]
+    STR r10, [sp, #28]
+
+    MOV r4, r0 // Current power of a
+    MOV r5, #1 // Current mask
+
+#    MOV r4, #1 // loop counter
+#    MOV r5, r1 // loop limit
+
+    MOV r6, r2 // save copy of c
+    MOV r7, r0 // save a
+    MOV r8, r1 // save b
+
+    MOV r9, #1 // current product in r9
+
+    StartLoop:
+        # check limit
+#        CMP r4, r5
+#        BGE EndLoop
+
+#        MUL r0, r0, r7 // multiply by a
+
+        AND r1, r8, r5
+        CMP r1, #0
+        BEQ NotInPower
+            # Multiply running product
+            MOV r0, r9
+            MOV r1, r4
+            MOV r2, r6
+            BL powmult
+
+            MOV r9, r0
+
+        NotInPower:
+
+        MOV r3, #0
+        MOV r1, #1
+        AND r2, r5, r1, LSL #31
+        CMP r2, #0
+        ORRNE r3, #1
+        CMP r5, r8
+        ORRGT r3, #1
+        CMP r3, #1
+        BEQ EndLoop // Break out of loop
+
+        MOV r0, r4
+        MOV r1, r4
+        MOV r2, r6
+        BL powmult
+
+        MOV r4, r0 // Store in r4
+
+        LSL r5, #1 // Move mask to next bit
+
+        B StartLoop
+    EndLoop:
+
+    MOV r0, r9 // Move return value
+
+    # pop stack
+    LDR lr, [sp, #0]
+    LDR r4, [sp, #4]
+    LDR r5, [sp, #8]
+    LDR r6, [sp, #12]
+    LDR r7, [sp, #16]
+    LDR r8, [sp, #20]
+    LDR r9, [sp, #24]
+    LDR r10, [sp, #28]
+    ADD sp, sp, #32
     MOV pc, lr
 # END powmod
 
@@ -175,8 +277,14 @@ isPrime:
 
             # Get random value for a in r0
             BL rand
-            # Adjust value so (1 < a < input)
-            SUB r1, r4, #3 @ -2 for excluding 1 and input value, -1 b/c first possible mod value is 0
+            # Adjust value so (1 < a < min(input, 2^31 - 1))
+            MOV r2, #1
+            LSL r2, #31
+            SUB r2, r2, #1
+            CMP r4, r2
+            MOVLE r1, r4
+            MOVGT r1, r2
+            SUB r1, #3
             BL modulus
             # Store value of a in r6
             ADD r6, r0, #2
@@ -541,7 +649,7 @@ genKeys:
         BL printf
 
         # Read input
-        LDR r0, =formatStrTwoInt
+        LDR r0, =formatStrTwoInts
         LDR r1, =inputP
         LDR r2, =inputQ
         BL scanf
@@ -553,23 +661,47 @@ genKeys:
         LDR r2, [r2, #0]
         # Start if block; check if numbers are the same
             CMP r1, r2
-            BNE RangeCheckP
+            BNE ModulusOverflowCheck
 
             # p == q code block
             LDR r0, =notDistinctMessage
             BL printf
             B EndValidityChecks
+        ModulusOverflowCheck:
+           # Use 64 bit mult to check for overflow
+           UMULL r4, r5, r1, r2
+           CMP r5, #0
+           BEQ RangeCheckP
+
+           # overflowed code block
+           LDR r0, =modulusOverflowMessage
+           BL printf
+           B EndValidityChecks
         RangeCheckP:
+            MOV r3, #0 @ Logical value in r3
             CMP r1, #13
-            BGE RangeCheckQ
+            ORRLT r3, #1
+            LDR r0, =pqUpperLimit
+            LDR r0, [r0, #0]
+            CMP r1, r0
+            ORRGT r3, #1
+            CMP r3, #0
+            BEQ RangeCheckQ
 
             # p outside of range code block
             LDR r0, =notInRangeMessage
             BL printf
             B EndValidityChecks
         RangeCheckQ:
+            MOV r3, #0 @ Logical value in r3
             CMP r2, #13
-            BGE CompCheckP
+            ORRLT r3, #1
+            LDR r0, =pqUpperLimit
+            LDR r0, [r0, #0]
+            CMP r1, r0
+            ORRGT r3, #1
+            CMP r3, #0
+            BEQ CompCheckP
 
             # q outside of range code block
             LDR r0, =notInRangeMessage
@@ -643,21 +775,23 @@ genKeys:
     MOV pc, lr
 
 .data
+    pqUpperLimit: .word 2147483647
     # Input values
     inputP: .word 0
     inputQ: .word 0
     # Format string for two integers separated by a space
-    formatStrTwoInt: .asciz "%d %d"
+    formatStrTwoInts: .asciz "%d %d"
     # Prompt for input
-    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13\n"
+    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13 and <= 2,147,483,647. The product must be less than 2^32\n"
     # Error messages
-    notInRangeMessage: .asciz "%d is not >= 13\n"
+    modulusOverflowMessage: .asciz "The product of %d and %d is too large\n"
+    notInRangeMessage: .asciz "%d is not in the specified range\n"
     notPrimeMessage: .asciz "%d is not prime\n"
     notDistinctMessage: .asciz "%d is equal to %d\n"
 # end genKeys
 
 #Purpose: encrypt
-#Output:encrypt.txt 
+#Output:encrypt.txt
 .global encrypt
 
 .text
@@ -681,7 +815,7 @@ encrypt:
     LDR r1, = inputN
     LDR r2, = inputE
     BL scanf
-    
+
     LDR r1, = inputN
     LDR r4, [r1]
     LDR, r2, =inputE
@@ -806,7 +940,7 @@ decrypt:
     LDR r1, = inputN
     LDR r2, = inputD
     BL scanf
-    
+
     LDR r1, = inputN
     LDR r4, [r1]
     LDR r2, =inputD
