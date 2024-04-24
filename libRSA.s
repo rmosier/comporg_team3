@@ -24,7 +24,7 @@ modulus:
     MOV r4, r0
 
     # finds modulus
-    BL __aeabi_uidiv
+    BL __aeabi_idiv
     MUL r2, r0, r1
     SUB r0, r4, r2
 
@@ -131,8 +131,6 @@ powmod:
 
 # Function: isPrime
 # Purpose: Checks if the input number is prime using the Rabin-Miller test. Repeats 10 times
-#          Does not work for negative numbers or numbers greate than 67,108,893
-#
 # Input: r0 - value to check (unsigned integer)
 #
 # Output: r1 - 1 if test passed, else 0
@@ -177,11 +175,8 @@ isPrime:
 
             # Get random value for a in r0
             BL rand
-            # Adjust value so (1 < a < min(input, 64))
-            CMP r4, #64
-            MOVLE r1, r4
-            MOVGT r1, #64
-            SUB r1, #3
+            # Adjust value so (1 < a < input)
+            SUB r1, r4, #3 @ -2 for excluding 1 and input value, -1 b/c first possible mod value is 0
             BL modulus
             # Store value of a in r6
             ADD r6, r0, #2
@@ -565,30 +560,16 @@ genKeys:
             BL printf
             B EndValidityChecks
         RangeCheckP:
-            MOV r3, #0 @ Logical value in r3
             CMP r1, #13
-            ORRLT r3, #1
-            LDR r0, =pqUpperLimit
-            LDR r0, [r0, #0]
-            CMP r1, r0
-            ORRGT r3, #1
-            CMP r3, #0
-            BEQ RangeCheckQ
+            BGE RangeCheckQ
 
             # p outside of range code block
             LDR r0, =notInRangeMessage
             BL printf
             B EndValidityChecks
         RangeCheckQ:
-            MOV r3, #0 @ Logical value in r3
             CMP r2, #13
-            ORRLT r3, #1
-            LDR r0, =pqUpperLimit
-            LDR r0, [r0, #0]
-            CMP r1, r0
-            ORRGT r3, #1
-            CMP r3, #0
-            BEQ CompCheckP
+            BGE CompCheckP
 
             # q outside of range code block
             LDR r0, =notInRangeMessage
@@ -662,16 +643,15 @@ genKeys:
     MOV pc, lr
 
 .data
-    pqUpperLimit: .word 67108859
     # Input values
     inputP: .word 0
     inputQ: .word 0
     # Format string for two integers separated by a space
     formatStrTwoInt: .asciz "%d %d"
     # Prompt for input
-    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13 and <= 67,108,859\n"
+    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13\n"
     # Error messages
-    notInRangeMessage: .asciz "%d is not in the specified range\n"
+    notInRangeMessage: .asciz "%d is not >= 13\n"
     notPrimeMessage: .asciz "%d is not prime\n"
     notDistinctMessage: .asciz "%d is equal to %d\n"
 # end genKeys
@@ -800,3 +780,115 @@ outputFile: .asciz "encrypted.txt"
 openMode: .asciz "w"
 fprintfFormat: .asciz "%d "
 buffer: .space 256
+
+#Purpose decrypt
+
+.global decrypt
+
+.text
+
+decrypt:
+    # Push initial registers and link register onto stack
+    SUB sp, sp, #32     @ Reserve stack space for 8 registers
+    STR lr, [sp, #28]   @ Save link register
+    STR r4, [sp, #24]   @ Save r4
+    STR r5, [sp, #20]   @ Save r5
+    STR r6, [sp, #16]   @ Save r6
+    STR r7, [sp, #12]   @ Save r7
+    STR r8, [sp, #8]    @ Save r8
+    STR r9, [sp, #4]    @ Save r9
+    STR r10, [sp]       @ Save r10
+
+    LDR r0, = keysPrompt
+    BL printf
+
+    LDR r0, = formatStrTwoInt
+    LDR r1, = inputN
+    LDR r2, = inputD
+    BL scanf
+    
+    LDR r1, = inputN
+    LDR r4, [r1]
+    LDR r2, =inputD
+    LDR r5, [r2]
+
+    # Open the input file for reading
+    LDR r0, =inputFile
+    LDR r1, =readMode
+    BL fopen
+    MOV r7, r0          @ Save the file handle
+
+    # Open the output file for writing
+    LDR r0, =outputFile
+    LDR r1, =writeMode
+    BL fopen
+    MOV r8, r0          @ Save the file handle
+
+    # Initialize loop counter
+    MOV r9, #0          @ Loop counter
+
+DecryptLoop:
+    # Read an encrypted character from the file using fscanf
+    MOV r0, r7          @ File handle
+    LDR r1, =fscanfFormat   @ Format string for fscanf
+    LDR r2, =encryptedChar  @ Address to store the encrypted character
+    BL fscanf
+
+    # Check if fscanf reached the end of file
+    CMP r0, #1          @ Compare return value with 1 (successful read)
+    BNE CloseFiles      @ Exit loop if end of file or read error
+
+    # Load the encrypted character into r1
+    LDR r1, =encryptedChar
+    LDR r1, [r1]
+
+    # Decrypt character using the equation m = c^d mod n
+    MOV r0, r1          @ Move the encrypted character to r0 (c)
+    MOV r1, r5          @ Private key exponent d
+    MOV r2, r4          @ Modulus n
+    BL powmod           @ Assume powmod adjusts r0 = c^d mod n correctly
+
+    # Write the decrypted character to the output file using fprintf
+    MOV r2, r0          @ Decrypted character (m)
+    MOV r0, r8          @ File handle
+    LDR r1, =fprintfFormat  @ Format string for fprintf
+    BL fprintf
+
+    # Increment the loop counter
+    ADD r9, r9, #1      @ Increment the loop counter
+
+    B DecryptLoop       @ Repeat for next character
+
+CloseFiles:
+    # Close the input file
+    MOV r0, r7          @ File handle
+    BL fclose
+
+    # Close the output file
+    MOV r0, r8          @ File handle
+    BL fclose
+
+    # Restore registers from stack
+    LDR r10, [sp]       @ Restore r10
+    LDR r9, [sp, #4]    @ Restore r9
+    LDR r8, [sp, #8]    @ Restore r8
+    LDR r7, [sp, #12]   @ Restore r7
+    LDR r6, [sp, #16]   @ Restore r6
+    LDR r5, [sp, #20]   @ Restore r5
+    LDR r4, [sp, #24]   @ Restore r4
+    LDR lr, [sp, #28]   @ Restore link register
+    ADD sp, sp, #32     @ Clean up the stack
+
+    # Finish the program
+    MOV r0, #0          @ Standard return value for success
+    MOV pc, lr          @ Return to calling process
+
+.data
+keysPrompt: .asciz "Enter modulus n and private key exponent d (separated by space):\n"
+inputN: .word 0
+inputD: .word 0
+inputFile: .asciz "encrypted.txt"
+readMode: .asciz "r"
+writeMode: .asciz "w"
+fscanfFormat: .asciz "%d"
+encryptedChar: .word 0

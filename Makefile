@@ -1,4 +1,4 @@
-All: GCD PowerMod IsPrime testGenKeys testPrime
+All: GCD PowerMod IsPrime testGenKeys testPrime testEncrypt testDecrypt
 LIB=libRSA.o
 CC=gcc
 
@@ -20,6 +20,10 @@ testPrime: testPrimeMain.s $(LIB)
 	$(CC) $@.o $(LIB) -g -o $@
 
 testEncrypt: testEncrypt.s $(LIB)
+	$(CC) $@.s -g -c -o $@.o
+	$(CC) $@.o $(LIB) -g -o $@
+
+testDecrypt: testDecrypt.s $(LIB)
 	$(CC) $@.s -g -c -o $@.o
 	$(CC) $@.o $(LIB) -g -o $@
 
