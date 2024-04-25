@@ -7,8 +7,6 @@
 .global modulus
 .global gcd
 .global powmod
-.global isPrime2
-
 
 #Purpose: find modulus of number 
 #Inputs: r0 - input number, r1 - divisor
@@ -164,22 +162,14 @@ powmod:
     MOV r4, r0 // Current power of a
     MOV r5, #1 // Current mask
 
-#    MOV r4, #1 // loop counter
-#    MOV r5, r1 // loop limit
-
     MOV r6, r2 // save copy of c
     MOV r7, r0 // save a
+
     MOV r8, r1 // save b
 
     MOV r9, #1 // current product in r9
 
     StartLoop:
-        # check limit
-#        CMP r4, r5
-#        BGE EndLoop
-
-#        MUL r0, r0, r7 // multiply by a
-
         AND r1, r8, r5
         CMP r1, #0
         BEQ NotInPower
@@ -393,78 +383,6 @@ isPrime:
 
 # end isPrime
 
-# isPrime2
-# Inputs: r0 - input number
-# Outputs: r0 - 1 if prime, 0 if not prime, -1 if invalid (e.g <2)
-.global isPrime2
-.text
-isPrime2:
-    SUB sp, sp, #12
-    STR lr, [sp, #0]
-    STR r4, [sp, #4]
-    STR r5, [sp, #8]
-
-    # initialize start of array as 2 
-    MOV r4, #2
-
-    # initialize end of array as input//2 +1 
-    MOV r6, r0 // save copy of input
-    MOV r1, #2
-    BL __aeabi_idiv
-    ADD r0, r0, #1 
-    MOV r5, r0 // loop limit
-   
-    # initialize r7 as true
-    MOV r7, #0
-
-    StartPrimeLoop:
-        # Check the limit
-        CMP r4, r5
-        BGE EndPrimeLoop
-
-        # Loop statement or block
-        MOV r1, r4
-        MOV r0, r6
-        BL modulus
-        CMP r0, #0
-        ADDEQ r7, #1 
-
-        # Get the next value
-        ADD r4, r4, #1
-        B StartPrimeLoop
-    EndPrimeLoop:
-    
-    CMP r6, #2
-    MOVLT r7, #-1 // -1 if input wasn't valued (<2)
-    MOV r0, r7
- 
-    # print if number is error or not
-    MOV r1, #0
-    MOV r7, r0 // copy isPrime result    
-    CMP r0, #-1
-    MOVEQ r1, #1
-
-    CMP r1, #0
-    BNE ErrorMsg
-        CMP r7, #0
-        BGT NotPrimeMsg
-            MOV r0, #1
-            B EndMsg
-        NotPrimeMsg:
-            MOV r0, #0
-            B EndMsg
-    ErrorMsg:
-        MOV r0, #-1
-    EndMsg:
-
-    LDR lr, [sp, #0]
-    LDR r4, [sp, #4]
-    LDR r5, [sp, #8]
-    ADD sp, sp, #12
-    MOV pc, lr
-# End of IsPrime2
-
-
 
 # Function: cpubexp
 # Purpose: Prompts for and validates value for public key exponent
@@ -543,7 +461,7 @@ cpubexp:
 # Input: r0 - totient value (integer)
 #        r1 - public key exponent (integer)
 #
-# Output: r2 - private key exponent (integer)
+# Output: r0 - private key exponent (integer)
 #
 .global cprivexp
 .text
@@ -584,7 +502,7 @@ cprivexp:
             # Calculate q or (a/b) in r0
             MOV r0, r9
             MOV r1, r10
-            BL __aeabi_idiv
+            BL __aeabi_uidiv
 
             # Old value of a in r1. Update value of a to b
             MOV r1, r9
@@ -610,6 +528,8 @@ cprivexp:
         B NonzeroBLoopStart @ Continue NonzeroBLoop
     NonzeroBLoopEnd:
 
+    MOV r0, r2
+
     # Return from stack
     LDR lr, [sp, #0]
     LDR r4, [sp, #4]
@@ -622,8 +542,8 @@ cprivexp:
     LDR r11, [sp, #32]
     ADD sp, #36
     MOV pc, lr
-
 # end cprivexp
+
 
 # Function: genKeys
 # Purpose: Generates n and the public/private keys. Restricts p,q >= 13
@@ -762,9 +682,12 @@ genKeys:
     MOV r1, r6
     BL cprivexp
 
+    MOV r5, r0
+
     # Move return values to correct registers
     MOV r0, r4
     MOV r1, r6
+    MOV r2, r5
 
     # Return from stack
     LDR lr, [sp, #0]
@@ -783,7 +706,7 @@ genKeys:
     formatStrTwoInts: .asciz "%d %d"
     # Prompt for input
     inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13 and <= 2,147,483,647. The product must be less than 2^32\n"
-    # Error messages
+    # Output messages
     modulusOverflowMessage: .asciz "The product of %d and %d is too large\n"
     notInRangeMessage: .asciz "%d is not in the specified range\n"
     notPrimeMessage: .asciz "%d is not prime\n"
@@ -791,6 +714,9 @@ genKeys:
 # end genKeys
 
 #Purpose: encrypt
+#Input: r0 Modulus (integer)
+#       r1 Public key (integer)
+#
 #Output:encrypt.txt
 .global encrypt
 
@@ -808,18 +734,9 @@ encrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    LDR r0, =keysPrompt
-    BL printf
-
-    LDR r0, =formatStrTwoInt
-    LDR r1, =inputN
-    LDR r2, =inputE
-    BL scanf
-
-    LDR r1, =inputN
-    LDR r4, [r1]
-    LDR r2, =inputE
-    LDR r5, [r2]
+    # Save modulus and key
+    MOV r4, r0
+    MOV r5, r1
 
     # Prompt for message
     LDR r0, =msgPrompt
@@ -913,10 +830,6 @@ CloseFile2:
     MOV pc, lr          @ Return to calling process
 
 .data
-keysPrompt: .asciz "Enter modulus n and public key exponent e (separated by space):\n"
-formatStrTwoInt: .asciz "%d %d"
-inputN: .word 0
-inputE: .word 0
 msgPrompt: .asciz "Enter a message to encrypt:\n"
 outputFile: .asciz "encrypted.txt"
 openMode: .asciz "w"
@@ -924,6 +837,8 @@ fprintfFormat: .asciz "%d "
 buffer: .space 256
 
 #Purpose decrypt
+#Input: r0 Modulus (integer)
+#       r1 Private key (integer)
 
 .global decrypt
 
@@ -941,18 +856,10 @@ decrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    LDR r0, =keysPromptd
-    BL printf
 
-    LDR r0, =formatStrTwoIntd
-    LDR r1, =inputN
-    LDR r2, =inputD
-    BL scanf
-
-    LDR r1, =inputN
-    LDR r4, [r1]
-    LDR r2, =inputD
-    LDR r5, [r2]
+    # Save input modulus and key
+    MOV r4, r0
+    MOV r5, r1
 
     # Open the input file for reading
     LDR r0, =inputFile
@@ -1038,9 +945,6 @@ CloseFiles:
     MOV pc, lr          @ Return to calling process
 
 .data
-keysPromptd: .asciz "Enter modulus n and private key exponent d (separated by space):\n"
-formatStrTwoIntd: .asciz "%d %d"
-inputD: .word 0
 inputFile: .asciz "encrypted.txt"
 readMode: .asciz "r"
 outputFiled: .asciz "plaintext.txt"
