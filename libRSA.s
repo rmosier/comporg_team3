@@ -941,15 +941,15 @@ decrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    LDR r0, = keysPromptd
+    LDR r0, =keysPromptd
     BL printf
 
-    LDR r0, = formatStrTwoInt
-    LDR r1, = inputN
-    LDR r2, = inputD
+    LDR r0, =formatStrTwoIntd
+    LDR r1, =inputN
+    LDR r2, =inputD
     BL scanf
 
-    LDR r1, = inputN
+    LDR r1, =inputN
     LDR r4, [r1]
     LDR r2, =inputD
     LDR r5, [r2]
@@ -961,7 +961,7 @@ decrypt:
     MOV r7, r0          @ Save the file handle
 
     # Open the output file for writing
-    LDR r0, =outputFile
+    LDR r0, =outputFiled
     LDR r1, =writeMode
     BL fopen
     MOV r8, r0          @ Save the file handle
@@ -969,20 +969,35 @@ decrypt:
     # Initialize loop counter
     MOV r9, #0          @ Loop counter
 
-DecryptLoop:
+    # Read encrypted characters from the input file
+    LDR r10, =encryptedChars
+ReadLoop:
     # Read an encrypted character from the file using fscanf
     MOV r0, r7          @ File handle
-    LDR r1, =fscanfFormat   @ Format string for fscanf
-    LDR r2, =encryptedChar  @ Address to store the encrypted character
+    LDR r1, =fscanfFormatd   @ Format string for fscanf
+    MOV r2, r10         @ Address to store the encrypted character
     BL fscanf
 
     # Check if fscanf reached the end of file
     CMP r0, #1          @ Compare return value with 1 (successful read)
-    BNE CloseFiles      @ Exit loop if end of file or read error
+    BNE DecryptLoop     @ Exit loop if end of file or read error
+
+    # Increment the loop counter and buffer pointer
+    ADD r9, r9, #1      @ Increment the loop counter
+    ADD r10, r10, #4    @ Move to the next word in the buffer
+    B ReadLoop
+
+DecryptLoop:
+    # Check if all characters have been processed
+    CMP r9, #0          @ Compare loop counter with 0
+    BLE CloseFiles      @ Exit loop if all characters have been processed
+
+    # Decrement the loop counter and buffer pointer
+    SUB r9, r9, #1      @ Decrement the loop counter
+    SUB r10, r10, #4    @ Move to the previous word in the buffer
 
     # Load the encrypted character into r1
-    LDR r1, =encryptedChar
-    LDR r1, [r1]
+    LDR r1, [r10]
 
     # Decrypt character using the equation m = c^d mod n
     MOV r0, r1          @ Move the encrypted character to r0 (c)
@@ -993,11 +1008,8 @@ DecryptLoop:
     # Write the decrypted character to the output file using fprintf
     MOV r2, r0          @ Decrypted character (m)
     MOV r0, r8          @ File handle
-    LDR r1, =fprintfFormat  @ Format string for fprintf
+    LDR r1, =fprintfFormatd  @ Format string for fprintf
     BL fprintf
-
-    # Increment the loop counter
-    ADD r9, r9, #1      @ Increment the loop counter
 
     B DecryptLoop       @ Repeat for next character
 
@@ -1027,9 +1039,12 @@ CloseFiles:
 
 .data
 keysPromptd: .asciz "Enter modulus n and private key exponent d (separated by space):\n"
+formatStrTwoIntd: .asciz "%d %d"
 inputD: .word 0
 inputFile: .asciz "encrypted.txt"
 readMode: .asciz "r"
+outputFiled: .asciz "plaintext.txt"
 writeMode: .asciz "w"
-fscanfFormat: .asciz "%d"
-encryptedChar: .word 0
+fscanfFormatd: .asciz "%d"
+fprintfFormatd: .asciz "%c"
+encryptedChars: .space 1024  @ Buffer to store encrypted characters
