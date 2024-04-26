@@ -734,9 +734,18 @@ encrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    # Save modulus and key
-    MOV r4, r0
-    MOV r5, r1
+    LDR r0, =keysPrompt
+    BL printf
+
+    LDR r0, =formatStrTwoInt
+    LDR r1, =inputN
+    LDR r2, =inputE
+    BL scanf
+
+    LDR r1, =inputN
+    LDR r4, [r1]
+    LDR r2, =inputE
+    LDR r5, [r2]
 
     # Prompt for message
     LDR r0, =msgPrompt
@@ -770,12 +779,27 @@ RemoveNewline:
     # Initialize loop counter
     MOV r8, #0          @ Loop counter
 
+    # Calculate the length of the message
+    LDR r9, =buffer     @ Reset the buffer pointer to start of message
+    MOV r10, #0         @ Initialize message length counter
+LengthLoop:
+    LDRB r1, [r9], #1   @ Load byte from buffer and increment pointer
+    CMP r1, #0          @ Check if the byte is null terminator
+    ADDNE r10, r10, #1  @ Increment message length if not null terminator
+    BNE LengthLoop      @ Repeat until end of string
+
+    # Allocate stack space for encrypted characters
+    MOV r0, r10         @ Move the message length to r0
+    LSL r0, r0, #2      @ Multiply by 4 to get the number of bytes needed
+    SUB sp, sp, r0      @ Allocate stack space for encrypted characters
+
     # Encrypt each character
     LDR r9, =buffer     @ Reset the buffer pointer to start of message
+    MOV r11, sp         @ Initialize the stack pointer for storing encrypted characters
 EncryptLoop:
     LDRB r1, [r9], #1   @ Load byte from buffer and increment pointer
     CMP r1, #0          @ Check if the byte is null terminator
-    BEQ CloseFile       @ Exit loop if end of string
+    BEQ WriteLoop       @ Exit loop if end of string
 
     # Encrypt character using the equation c = m^e mod n
     MOV r0, r1          @ Move the character to r0 (m)
@@ -783,22 +807,23 @@ EncryptLoop:
     MOV r2, r4          @ Modulus n
     BL powmod           @ Assume powmod adjusts r0 = m^e mod n correctly
 
-    # Push the encrypted character onto the stack
-    PUSH {r0}           @ Push the encrypted character onto the stack
+    # Store the encrypted character on the stack
+    STR r0, [r11], #4   @ Store the encrypted character and increment the stack pointer
 
     # Increment the loop counter
     ADD r8, r8, #1      @ Increment the loop counter
     B EncryptLoop       @ Repeat for next character
 
-CloseFile:
+WriteLoop:
     # Write the encrypted characters to the file
     MOV r10, r8         @ Move the loop counter to r10
-WriteLoop:
+    MOV r11, sp         @ Reset the stack pointer to the start of encrypted characters
+WriteLoop2:
     CMP r10, #0         @ Check if the loop counter is zero
-    BEQ CloseFile2      @ Exit loop if all characters have been written
+    BEQ CloseFile       @ Exit loop if all characters have been written
 
-    # Pop the encrypted character from the stack
-    POP {r2}            @ Pop the encrypted character into r2
+    # Load the encrypted character from the stack
+    LDR r2, [r11], #4   @ Load the encrypted character and increment the stack pointer
 
     # Write the encrypted character to the file using fprintf
     MOV r0, r7          @ File handle
@@ -807,12 +832,17 @@ WriteLoop:
 
     # Decrement the loop counter
     SUB r10, r10, #1    @ Decrement the loop counter
-    B WriteLoop         @ Repeat for next character
+    B WriteLoop2        @ Repeat for next character
 
-CloseFile2:
+CloseFile:
     # Close the output file
     MOV r0, r7          @ File handle
     BL fclose
+
+    # Clean up the stack
+    MOV r0, r8          @ Move the loop counter to r0
+    LSL r0, r0, #2      @ Multiply by 4 to get the number of bytes allocated
+    ADD sp, sp, r0      @ Clean up the stack
 
     # Restore registers from stack
     LDR r10, [sp]       @ Restore r10
@@ -830,6 +860,10 @@ CloseFile2:
     MOV pc, lr          @ Return to calling process
 
 .data
+keysPrompt: .asciz "Enter modulus n and public key exponent e (separated by space):\n"
+formatStrTwoInt: .asciz "%d %d"
+inputN: .word 0
+inputE: .word 0
 msgPrompt: .asciz "Enter a message to encrypt:\n"
 outputFile: .asciz "encrypted.txt"
 openMode: .asciz "w"
@@ -856,10 +890,18 @@ decrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
+    LDR r0, =keysPromptd
+    BL printf
 
-    # Save input modulus and key
-    MOV r4, r0
-    MOV r5, r1
+    LDR r0, =formatStrTwoIntd
+    LDR r1, =inputN
+    LDR r2, =inputD
+    BL scanf
+
+    LDR r1, =inputN
+    LDR r4, [r1]
+    LDR r2, =inputD
+    LDR r5, [r2]
 
     # Open the input file for reading
     LDR r0, =inputFile
@@ -876,35 +918,35 @@ decrypt:
     # Initialize loop counter
     MOV r9, #0          @ Loop counter
 
-    # Read encrypted characters from the input file
-    LDR r10, =encryptedChars
-ReadLoop:
+    # Calculate the number of encrypted characters in the file
+    MOV r0, r7          @ File handle
+    MOV r1, #0          @ Offset from the beginning of the file
+    MOV r2, #2          @ Whence (0 = SEEK_SET, 1 = SEEK_CUR, 2 = SEEK_END)
+    BL fseek            @ Move file pointer to the end of the file
+    MOV r0, r7          @ File handle
+    BL ftell            @ Get the current file position (number of characters)
+    MOV r10, r0         @ Save the number of characters
+
+    # Move file pointer back to the beginning of the file
+    MOV r0, r7          @ File handle
+    MOV r1, #0          @ Offset from the beginning of the file
+    MOV r2, #0          @ Whence (0 = SEEK_SET)
+    BL fseek
+
+DecryptLoop:
     # Read an encrypted character from the file using fscanf
     MOV r0, r7          @ File handle
     LDR r1, =fscanfFormatd   @ Format string for fscanf
-    MOV r2, r10         @ Address to store the encrypted character
+    LDR r2, =encryptedChar  @ Address to store the encrypted character
     BL fscanf
 
     # Check if fscanf reached the end of file
     CMP r0, #1          @ Compare return value with 1 (successful read)
-    BNE DecryptLoop     @ Exit loop if end of file or read error
-
-    # Increment the loop counter and buffer pointer
-    ADD r9, r9, #1      @ Increment the loop counter
-    ADD r10, r10, #4    @ Move to the next word in the buffer
-    B ReadLoop
-
-DecryptLoop:
-    # Check if all characters have been processed
-    CMP r9, #0          @ Compare loop counter with 0
-    BLE CloseFiles      @ Exit loop if all characters have been processed
-
-    # Decrement the loop counter and buffer pointer
-    SUB r9, r9, #1      @ Decrement the loop counter
-    SUB r10, r10, #4    @ Move to the previous word in the buffer
+    BNE CloseFiles      @ Exit loop if end of file or read error
 
     # Load the encrypted character into r1
-    LDR r1, [r10]
+    LDR r1, =encryptedChar
+    LDR r1, [r1]
 
     # Decrypt character using the equation m = c^d mod n
     MOV r0, r1          @ Move the encrypted character to r0 (c)
@@ -918,7 +960,10 @@ DecryptLoop:
     LDR r1, =fprintfFormatd  @ Format string for fprintf
     BL fprintf
 
-    B DecryptLoop       @ Repeat for next character
+    # Increment the loop counter
+    ADD r9, r9, #1      @ Increment the loop counter
+    CMP r9, r10         @ Compare loop counter with the number of characters
+    BLT DecryptLoop     @ Repeat for next character if loop counter < number of characters
 
 CloseFiles:
     # Close the input file
@@ -945,10 +990,13 @@ CloseFiles:
     MOV pc, lr          @ Return to calling process
 
 .data
+keysPromptd: .asciz "Enter modulus n and private key exponent d (separated by space):\n"
+formatStrTwoIntd: .asciz "%d %d"
+inputD: .word 0
 inputFile: .asciz "encrypted.txt"
 readMode: .asciz "r"
 outputFiled: .asciz "plaintext.txt"
 writeMode: .asciz "w"
 fscanfFormatd: .asciz "%d"
 fprintfFormatd: .asciz "%c"
-encryptedChars: .space 1024  @ Buffer to store encrypted characters
+encryptedChar: .word 0
