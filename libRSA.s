@@ -589,8 +589,13 @@ genKeys:
             B EndValidityChecks
         ModulusOverflowCheck:
            # Use 64 bit mult to check for overflow
+           MOV r3, #0
            UMULL r4, r5, r1, r2
            CMP r5, #0
+           ORRNE r3, #1
+           CMP r4, #127
+           ORRLE r3, #1
+           CMP r3, #0
            BEQ RangeCheckP
 
            # overflowed code block
@@ -598,30 +603,20 @@ genKeys:
            BL printf
            B EndValidityChecks
         RangeCheckP:
-            MOV r3, #0 @ Logical value in r3
-            CMP r1, #13
-            ORRLT r3, #1
             LDR r0, =pqUpperLimit
             LDR r0, [r0, #0]
             CMP r1, r0
-            ORRGT r3, #1
-            CMP r3, #0
-            BEQ RangeCheckQ
+            BLE RangeCheckQ
 
             # p outside of range code block
             LDR r0, =notInRangeMessage
             BL printf
             B EndValidityChecks
         RangeCheckQ:
-            MOV r3, #0 @ Logical value in r3
-            CMP r2, #13
-            ORRLT r3, #1
             LDR r0, =pqUpperLimit
             LDR r0, [r0, #0]
             CMP r1, r0
-            ORRGT r3, #1
-            CMP r3, #0
-            BEQ CompCheckP
+            BLE CompCheckP
 
             # q outside of range code block
             LDR r0, =notInRangeMessage
@@ -705,12 +700,12 @@ genKeys:
     # Format string for two integers separated by a space
     formatStrTwoInts: .asciz "%d %d"
     # Prompt for input
-    inputPQPrompt: .asciz "Enter two distinct prime numbers >= 13 and <= 2,147,483,647. The product must be less than 2^32\n"
+    inputPQPrompt: .asciz "Enter two distinct prime numbers <= 2,147,483,647. The product must be less than 2^32 and greater than 127\n"
     # Output messages
-    modulusOverflowMessage: .asciz "The product of %d and %d is too large\n"
-    notInRangeMessage: .asciz "%d is not in the specified range\n"
-    notPrimeMessage: .asciz "%d is not prime\n"
-    notDistinctMessage: .asciz "%d is equal to %d\n"
+    modulusOverflowMessage: .asciz "The product of %d and %d is not in the specified range\n\n"
+    notInRangeMessage: .asciz "%d is not in the specified range\n\n"
+    notPrimeMessage: .asciz "%d is not prime\n\n"
+    notDistinctMessage: .asciz "%d is equal to %d\n\n"
 # end genKeys
 
 #Purpose: encrypt
@@ -734,18 +729,8 @@ encrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    LDR r0, =keysPrompt
-    BL printf
-
-    LDR r0, =formatStrTwoInt
-    LDR r1, =inputN
-    LDR r2, =inputE
-    BL scanf
-
-    LDR r1, =inputN
-    LDR r4, [r1]
-    LDR r2, =inputE
-    LDR r5, [r2]
+    MOV r4, r0
+    MOV r5, r1
 
     # Prompt for message
     LDR r0, =msgPrompt
@@ -860,10 +845,6 @@ CloseFile:
     MOV pc, lr          @ Return to calling process
 
 .data
-keysPrompt: .asciz "Enter modulus n and public key exponent e (separated by space):\n"
-formatStrTwoInt: .asciz "%d %d"
-inputN: .word 0
-inputE: .word 0
 msgPrompt: .asciz "Enter a message to encrypt:\n"
 outputFile: .asciz "encrypted.txt"
 openMode: .asciz "w"
@@ -890,18 +871,8 @@ decrypt:
     STR r9, [sp, #4]    @ Save r9
     STR r10, [sp]       @ Save r10
 
-    LDR r0, =keysPromptd
-    BL printf
-
-    LDR r0, =formatStrTwoIntd
-    LDR r1, =inputN
-    LDR r2, =inputD
-    BL scanf
-
-    LDR r1, =inputN
-    LDR r4, [r1]
-    LDR r2, =inputD
-    LDR r5, [r2]
+    MOV r4, r0
+    MOV r5, r1
 
     # Open the input file for reading
     LDR r0, =inputFile
@@ -990,9 +961,6 @@ CloseFiles:
     MOV pc, lr          @ Return to calling process
 
 .data
-keysPromptd: .asciz "Enter modulus n and private key exponent d (separated by space):\n"
-formatStrTwoIntd: .asciz "%d %d"
-inputD: .word 0
 inputFile: .asciz "encrypted.txt"
 readMode: .asciz "r"
 outputFiled: .asciz "plaintext.txt"
