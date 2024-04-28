@@ -1,5 +1,5 @@
-All: GCD PowerMod testGenKeys testPrime testEncrypt testDecrypt RSA
-LIB=libRSA.o
+All: GCD PowerMod testGenKeys testPrime testEncrypt testDecrypt rmosier1_team3_RSA
+LIB=rmosier1_team3_RSAlib.o
 CC=gcc
 
 GCD: GCD.o $(LIB)
@@ -27,8 +27,8 @@ testDecrypt: testDecrypt.s $(LIB)
 	$(CC) $@.s -g -c -o $@.o
 	$(CC) $@.o $(LIB) -g -o $@
 
-RSA: RSAMain.s $(LIB)
-	$(CC) $@Main.s -g -c -o $@.o
+rmosier1_team3_RSA: rmosier1_team3_RSA.s $(LIB)
+	$(CC) $@.s -g -c -o $@.o
 	$(CC) $@.o $(LIB) -g -o $@
 .s.o:
 	$(CC) $(@:.o=.s) -g -c -o $@
