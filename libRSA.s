@@ -100,7 +100,7 @@ powmult:
     MOV r7, #0 // current product in r7
 
     StartLoopMult:
-		# Use and to check if first bit is set in b
+# Use and to check if first bit is set in b
         AND r1, r5, #1
         CMP r1, #0
         BEQ NotInProduct
@@ -115,7 +115,7 @@ powmult:
             MOV r7, r0 // Update product value in r7
         NotInProduct:
 
-		# Shift b to the right to check next bit
+# Shift b to the right to check next bit
         LSR r5, #1
         CMP r5, #0
         BEQ EndLoopMult // No more bits in B; Break out of multloop
@@ -170,7 +170,7 @@ powmod:
     MOV r9, #1 // current output in r9
 
     StartLoop:
-		# Check if b has bit matching current power of 2 set
+# Check if b has bit matching current power of 2 set
         AND r1, r8, r5
         CMP r1, #0
         BEQ NotInPower
@@ -185,18 +185,18 @@ powmod:
         NotInPower:
 
         MOV r3, #0 // logical value in r3
-		# Check if mask is the 31st bit
+# Check if mask is the 31st bit
         MOV r1, #1
         AND r2, r5, r1, LSL #31 
         CMP r2, #0
         ORRNE r3, #1
-		# Check if mask is greater than b
+# Check if mask is greater than b
         CMP r5, r8
         ORRGT r3, #1
         CMP r3, #1
         BEQ EndLoop // Break out of loop
 
-		# Double current power of a
+# Double current power of a
         MOV r0, r4
         MOV r1, r4
         MOV r2, r6
@@ -587,7 +587,7 @@ genKeys:
            UMULL r4, r5, r1, r2
            CMP r5, #0
            ORRNE r3, #1
-		   # Check that product of input numbers is >127
+           # Check that product of input numbers is >127
            CMP r4, #127
            ORRLE r3, #1
            CMP r3, #0
