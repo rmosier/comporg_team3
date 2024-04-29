@@ -1,5 +1,5 @@
 # FileName: RSAMain.s
-# Author: Ting-Wei Wang
+# Author: Team3
 # Date: 4/24/24
 # Purpose: User interface
 #
@@ -16,10 +16,10 @@ main:
     STR r6, [sp, #12]
     STR r7, [sp, #16]
 
+    # Initialize saved modulus and key values to 0
     MOV r5, #0
     MOV r6, #0
     MOV r7, #0
-
 
     InputLoopStart:
         # Display prompt for user actions
@@ -40,10 +40,13 @@ main:
         BNE EncryptMessage
             # Call genKeys function to generate private and public keys
             BL genKeys
+
+            # Save modulus and keys in r5, r6, and r7
             MOV r5, r0
             MOV r6, r1
             MOV r7, r2
 
+            # Print keys to console
             LDR r0, =keysOutput
             MOV r1, r5
             MOV r2, r6
@@ -55,22 +58,26 @@ main:
             CMP r4, #'b'
             BNE DecryptMessage
 
-            CMP r5, #0
+            CMP r5, #0 // Check if saved modulus and keys exist
             BNE SetModAndPub
+                # No keys; prompt user
                 LDR r0, =keysPrompt
                 BL printf
 
+                # Read input
                 LDR r0, =formatStrTwoInt
                 LDR r1, =inputMod
                 LDR r2, =inputKey
                 BL scanf
 
+                # Load input into correct registers for encrypt
                 LDR r0, =inputMod
                 LDR r0, [r0]
                 LDR r1, =inputKey
                 LDR r1, [r1]
                 B CallEncrypt
             SetModAndPub:
+                # Saved keys exist; Load into correct registers
                 MOV r0, r5
                 MOV r1, r6
 
@@ -78,6 +85,7 @@ main:
             # Call encrypt function to decrypt a message
             BL encrypt
 
+            # Print message to indicate encryption completed
             LDR r0, =encryptionOutput
             BL printf
             B SwitchEnd
@@ -87,20 +95,24 @@ main:
 
             CMP r5, #0
             BNE LoadModAndPriv
+                # No keys; prompt user
                 LDR r0, =keysPromptd
                 BL printf
 
+                # Read input
                 LDR r0, =formatStrTwoInt
                 LDR r1, =inputMod
                 LDR r2, =inputKey
                 BL scanf
 
+                # Load input into correct registers for decrypt
                 LDR r0, =inputMod
                 LDR r0, [r0]
                 LDR r1, =inputKey
                 LDR r1, [r1]
                 B CallDecrypt
             LoadModAndPriv:
+                # Saved keys exist; Load into correct registers
                 MOV r0, r5
                 MOV r1, r7
 
@@ -108,6 +120,7 @@ main:
             # Call decrypt function to decrypt a message
             BL decrypt
 
+            # Print message to indicate decryption complete
             LDR r0, =decryptionOutput
             BL printf
             B SwitchEnd
@@ -120,6 +133,7 @@ main:
             MOV r6, #0
             MOV r7, #0
 
+            # Print message to indicate keys cleared
             LDR r0, =clearOutput
             BL printf
             B SwitchEnd
@@ -127,6 +141,7 @@ main:
             CMP r4, #'e'
             BNE SwitchElse
 
+            # Print message to indicate exit
             LDR r0, =exitOutput
             BL printf
             B InputLoopEnd @ Break out of InputLoop
