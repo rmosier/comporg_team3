@@ -79,7 +79,6 @@ gcd:
     MOV pc, lr
 # END gcd
 
-
 #Purpose: find a*b mod c 
 #Inputs: r0 - number 1 (a), r1 - number 2 (b), r2 - number 3 (c)
 #Output: r0 - a*b mod c
@@ -101,31 +100,32 @@ powmult:
     MOV r7, #0 // current product in r7
 
     StartLoopMult:
+		# Use and to check if first bit is set in b
         AND r1, r5, #1
         CMP r1, #0
         BEQ NotInProduct
-            # Multiply running product
+            # Add current a to product
             ADD r7, r7, r4
 
-            # Reduce using mod c
+            # Reduce product using mod c
             MOV r0, r7
             MOV r1, r6
             BL modulus
 
-            MOV r7, r0
-
+            MOV r7, r0 // Update product value in r7
         NotInProduct:
 
+		# Shift b to the right to check next bit
         LSR r5, #1
         CMP r5, #0
-        BEQ EndLoopMult // Break out of multloop
+        BEQ EndLoopMult // No more bits in B; Break out of multloop
 
         # Mult a by 2 and reduce using mod c
         MOV r0, r4, LSL #1
         MOV r1, r6
         BL modulus
 
-        MOV r4, r0 // Store in r4
+        MOV r4, r0 // Update value of a in r4
 
         B StartLoopMult
     EndLoopMult:
@@ -167,9 +167,10 @@ powmod:
 
     MOV r8, r1 // save b
 
-    MOV r9, #1 // current product in r9
+    MOV r9, #1 // current output in r9
 
     StartLoop:
+		# Check if b has bit matching current power of 2 set
         AND r1, r8, r5
         CMP r1, #0
         BEQ NotInPower
@@ -179,20 +180,23 @@ powmod:
             MOV r2, r6
             BL powmult
 
-            MOV r9, r0
+            MOV r9, r0 // Update output in r9
 
         NotInPower:
 
-        MOV r3, #0
+        MOV r3, #0 // logical value in r3
+		# Check if mask is the 31st bit
         MOV r1, #1
-        AND r2, r5, r1, LSL #31
+        AND r2, r5, r1, LSL #31 
         CMP r2, #0
         ORRNE r3, #1
+		# Check if mask is greater than b
         CMP r5, r8
         ORRGT r3, #1
         CMP r3, #1
         BEQ EndLoop // Break out of loop
 
+		# Double current power of a
         MOV r0, r4
         MOV r1, r4
         MOV r2, r6
@@ -240,20 +244,16 @@ isPrime:
     STR r8, [sp, #20]
     STR r9, [sp, #24]
 
-    # Return value in r7. Initialize as true
-    MOV r7, #1
+    MOV r7, #1 // Return value in r7. Initialize as true
 
     # Check if input is <= 3
     CMP r0, #3
     BHI ElseTestReq
-        # Return true
-        B EndTestReqIf
+        B EndTestReqIf // Return true
 
     ElseTestReq:
-        # Put value to check in r4
-        MOV r4, r0
-        # Put counter for TestRepeatLoop in r5
-        MOV r5, #0
+        MOV r4, r0 // value to check in r4
+        MOV r5, #0 // TestRepeatLoop counter in r5
 
         # Set random seed
         MOV r0, #0
@@ -265,8 +265,7 @@ isPrime:
             CMP r5, #10
             BGE TestRepeatLoopEnd @ Break out of TestRepeatLoop
 
-            # Get random value for a in r0
-            BL rand
+            BL rand // random value for a in r0
             # Adjust value so (1 < a < min(input, 2^31 - 1))
             MOV r2, #1
             LSL r2, #31
@@ -274,10 +273,10 @@ isPrime:
             CMP r4, r2
             MOVLE r1, r4
             MOVGT r1, r2
-            SUB r1, #3
+            SUB r1, #3 // Reduce mod range by three. - for removing 1; -1 for removing input; -1 for mod being zero indexed
             BL modulus
             # Store value of a in r6
-            ADD r6, r0, #2
+            ADD r6, r0, #2 // Start mod range at 2
 
             # Fermat test. Checking (a^p) = a mod p
             MOV r0, r6
@@ -291,18 +290,13 @@ isPrime:
                 MOV r7, #0
                 B TestRepeatLoopEnd @ Break out of TestRepeatLoop
 
-            FermatFailedElse:
-                # Fermat test passed. Do second part
+            FermatFailedElse: // Fermat test passed
                 # Find largest power of 2 that divides (input - 1)
-                # Keep last valid power in r8. Initialize to 2
-                MOV r8, #2
-                # Logical variable for breaking loop in r9
-                MOV r9, #0
+                MOV r8, #2 //last valid power in r8. Initialize to 2
+                MOV r9, #0 // Logical variable for breaking loop in r9
                 StartPowerLoop:
-                    # Calculate next power of 2 in r1
-                    MOV r1, r8, LSL #1
-                    # (input - 1) in r0
-                    SUB r0, r4, #1
+                    MOV r1, r8, LSL #1 // next power of 2 in r1
+                    SUB r0, r4, #1 // input - 1 in r0
                     # Check if power is greater than (input - 1)
                     CMP r0, r1
                     ORRLO r9, #1
@@ -313,7 +307,7 @@ isPrime:
                     BL modulus
                     CMP r0, #0
                     ORRNE r9, #1
-                    # Break loop if r9 > 0
+                    # Break loop if r9 is not 0
                     CMP r9, #0
                     BEQ BreakLoopElse
                         # Not divisible by next power or power is equal to (input - 1)
@@ -349,7 +343,7 @@ isPrime:
                         B EndFalseRootLoop @ Break out of FalseRootLoop
 
                     ResultElse:
-                        LSR r8, #1
+                        LSR r8, #1 // divide current power by 2
                         # Check that power of two is not 0
                         CMP r8, #0
                         BEQ EndFalseRootLoop @ Break out of FalseRootLoop
@@ -361,7 +355,7 @@ isPrime:
                 CMP r7, #0
                 BEQ TestRepeatLoopEnd @ Break out of TestRepeatLoop
 
-                ADD r5, #1
+                ADD r5, #1 // increment loop counter
             B TestRepeatLoopStart @ Continue TestRepeatLoop
         TestRepeatLoopEnd:
 
@@ -593,6 +587,7 @@ genKeys:
            UMULL r4, r5, r1, r2
            CMP r5, #0
            ORRNE r3, #1
+		   # Check that product of input numbers is >127
            CMP r4, #127
            ORRLE r3, #1
            CMP r3, #0
@@ -680,9 +675,9 @@ genKeys:
     MOV r5, r0
 
     # Move return values to correct registers
-    MOV r0, r4
-    MOV r1, r6
-    MOV r2, r5
+    MOV r0, r4 // modulus
+    MOV r1, r6 // public key
+    MOV r2, r5 // private key
 
     # Return from stack
     LDR lr, [sp, #0]
@@ -707,6 +702,7 @@ genKeys:
     notPrimeMessage: .asciz "%d is not prime\n\n"
     notDistinctMessage: .asciz "%d is equal to %d\n\n"
 # end genKeys
+
 
 #Purpose: encrypt
 #Input: r0 Modulus (integer)
